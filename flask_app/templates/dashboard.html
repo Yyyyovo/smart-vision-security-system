@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安防监控管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+            padding: 20px;
+        }
+        .header {
+            background: #fff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .header h1 { font-size: 20px; color: #16213e; }
+        .header a {
+            color: #e94560;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .stat-card .label { color: #888; font-size: 14px; margin-bottom: 8px; }
+        .stat-card .value { font-size: 28px; font-weight: bold; color: #16213e; }
+        .table-box {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .table-box h3 { font-size: 16px; margin-bottom: 15px; color: #16213e; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+        th { background: #f8f9fa; color: #666; font-weight: normal; }
+        .tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #fff;
+        }
+        .tag-stranger { background: #f87171; }
+        .tag-normal { background: #4ade80; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 安防监控管理后台</h1>
+        <a href="/">← 返回监控终端</a>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="label">总检测记录</div>
+            <div class="value" id="total">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">今日检测数</div>
+            <div class="value" id="today">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">熟人识别数</div>
+            <div class="value" id="known">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">陌生人告警</div>
+            <div class="value" id="stranger" style="color:#e94560">0</div>
+        </div>
+    </div>
+
+    <div class="table-box">
+        <h3>最近识别记录</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>时间</th>
+                    <th>识别结果</th>
+                    <th>置信度</th>
+                </tr>
+            </thead>
+            <tbody id="historyTable">
+                <tr><td colspan="4" style="text-align:center;color:#999">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+<script>
+    function loadStats() {
+        fetch('/api/statistics').then(r=>r.json()).then(res=>{
+            if(res.code === 0) {
+                const data = res.data;
+                document.getElementById('total').innerText = data.total;
+                document.getElementById('today').innerText = data.today;
+
+                const byLabel = data.by_label || {};
+                let known = 0, stranger = 0;
+                for(let k in byLabel) {
+                    if(k === 'Stranger' || k === '陌生人') stranger += byLabel[k];
+                    else known += byLabel[k];
+                }
+                document.getElementById('known').innerText = known;
+                document.getElementById('stranger').innerText = stranger;
+            }
+        });
+    }
+
+    function loadHistory() {
+        fetch('/api/history?limit=10').then(r=>r.json()).then(res=>{
+            if(res.code === 0) {
+                const list = res.data || [];
+                let html = '';
+                list.forEach(item=>{
+                    const isStranger = item.result_label === 'Stranger' || item.result_label === '陌生人';
+                    const tagClass = isStranger ? 'tag-stranger' : 'tag-normal';
+                    const label = isStranger ? '陌生人' : item.result_label;
+                    html += `<tr>
+                        <td>${item.id}</td>
+                        <td>${item.timestamp}</td>
+                        <td><span class="tag ${tagClass}">${label}</span></td>
+                        <td>${item.confidence ? item.confidence.toFixed(1) : '-'}</td>
+                    </tr>`;
+                });
+                if(list.length === 0) {
+                    html = '<tr><td colspan="4" style="text-align:center;color:#999">暂无记录</td></tr>';
+                }
+                document.getElementById('historyTable').innerHTML = html;
+            }
+        });
+    }
+
+    // 初始化
+    loadStats();
+    loadHistory();
+
+    // 定时刷新
+    setInterval(() => {
+        loadStats();
+        loadHistory();
+    }, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能安防监控系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(90deg, #16213e, #0f3460);
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 36px;
+        }
+        .header h1 { font-size: 14px; color: #e94560; }
+        .header a {
+            color: #e94560;
+            text-decoration: none;
+            font-size: 12px;
+            border: 1px solid #e94560;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .main { padding: 6px; }
+        .video-box {
+            width: 100%;
+            background: #000;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+        .video-box img { width: 100%; display: block; }
+        .info-bar {
+            display: flex;
+            justify-content: space-around;
+            background: #16213e;
+            padding: 6px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        .info-item { text-align: center; }
+        .info-item .label { color: #8892b0; margin-bottom: 2px; }
+        .info-item .value { font-size: 14px; font-weight: bold; }
+        .value.danger { color: #e94560; }
+        .value.success { color: #4ade80; }
+        .btn-group {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .btn {
+            flex: 1;
+            padding: 10px 0;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #fff;
+        }
+        .btn-start { background: #4ade80; }
+        .btn-stop { background: #f87171; }
+        .btn-capture { background: #60a5fa; }
+        .status-bar {
+            display: flex;
+            justify-content: space-around;
+            background: #0f3460;
+            padding: 5px;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #8892b0;
+        }
+
+        /* 大屏适配 */
+        @media (min-width: 769px) {
+            body { max-width: 800px; margin: 0 auto; }
+            .header h1 { font-size: 18px; }
+            .info-bar { font-size: 14px; }
+            .info-item .value { font-size: 18px; }
+            .btn { font-size: 15px; padding: 12px 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔒 安防监控终端</h1>
+        <a href="/dashboard">后台</a>
+    </div>
+    <div class="main">
+        <div class="video-box">
+            <img src="/video_feed" alt="监控画面">
+        </div>
+
+        <div class="info-bar">
+            <div class="info-item">
+                <div class="label">识别结果</div>
+                <div class="value success" id="rec-name">--</div>
+            </div>
+            <div class="info-item">
+                <div class="label">匹配度</div>
+                <div class="value" id="rec-conf">--</div>
+            </div>
+            <div class="info-item">
+                <div class="label">今日告警</div>
+                <div class="value danger" id="today-count">0</div>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn btn-start" onclick="startDetect()">启动</button>
+            <button class="btn btn-stop" onclick="stopDetect()">暂停</button>
+            <button class="btn btn-capture" onclick="capture()">抓拍</button>
+        </div>
+
+        <div class="status-bar">
+            <span>FPS: <b id="fps">0</b></span>
+            <span>帧数: <b id="frames">0</b></span>
+            <span>运行: <b id="runtime">00:00</b></span>
+        </div>
+    </div>
+
+<script>
+    let startTime = Date.now();
+
+    function updateStatus() {
+        fetch('/api/status').then(r=>r.json()).then(res=>{
+            if(res.code === 0) {
+                document.getElementById('fps').innerText = res.data.fps;
+                document.getElementById('frames').innerText = res.data.frame_count;
+            }
+        });
+    }
+
+    function updateLatest() {
+        fetch('/api/latest').then(r=>r.json()).then(res=>{
+            if(res.code === 0 && res.data.name) {
+                const nameEl = document.getElementById('rec-name');
+                nameEl.innerText = res.data.name === 'Stranger' ? '陌生人' : res.data.name;
+                nameEl.className = res.data.name === 'Stranger' ? 'value danger' : 'value success';
+                document.getElementById('rec-conf').innerText = (100 - res.data.confidence).toFixed(1) + '%';
+            }
+        });
+    }
+
+    function updateStats() {
+        fetch('/api/statistics').then(r=>r.json()).then(res=>{
+            if(res.code === 0) {
+                document.getElementById('today-count').innerText = res.data.today;
+            }
+        });
+    }
+
+    function updateRuntime() {
+        const diff = Math.floor((Date.now() - startTime) / 1000);
+        const m = Math.floor(diff / 60).toString().padStart(2, '0');
+        const s = (diff % 60).toString().padStart(2, '0');
+        document.getElementById('runtime').innerText = `${m}:${s}`;
+    }
+
+    function startDetect() {
+        fetch('/api/start', {method: 'POST'}).then(r=>r.json()).then(res=>{
+            alert(res.message);
+        });
+    }
+
+    function stopDetect() {
+        fetch('/api/stop', {method: 'POST'}).then(r=>r.json()).then(res=>{
+            alert(res.message);
+        });
+    }
+
+    function capture() {
+        fetch('/api/capture', {method: 'POST'}).then(r=>r.json()).then(res=>{
+            alert(res.message);
+            updateStats();
+        });
+    }
+
+    // 定时刷新
+    setInterval(updateStatus, 1000);
+    setInterval(updateLatest, 1000);
+    setInterval(updateStats, 3000);
+    setInterval(updateRuntime, 1000);
+
+    // 初始化
+    updateStatus();
+    updateLatest();
+    updateStats();
+</script>
+</body>
+</html>
